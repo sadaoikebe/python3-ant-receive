@@ -10,6 +10,7 @@ https://github.com/tomwardill/developerhealth
     by Tom Wardill
 
 Modified for Python 3 - Sadao Ikebe
+reads bike power meter
 
 """
 import sys
@@ -19,14 +20,12 @@ from ant.core.constants import CHANNEL_TYPE_TWOWAY_RECEIVE, TIMEOUT_NEVER
 import socket
 import struct
 
-SERIAL = '/dev/ttyUSB0'
-NETKEY = [0xb9, 0xa5, 0x21, 0xfb, 0xbd, 0x72, 0xc3, 0x45]
-
-import traceback
-
 class PowerMeter(event.EventCallback):
 
-    def __init__(self):
+    def __init__(self, serial, netkey, report):
+        self.serial = serial
+        self.netkey = netkey
+        self.report = report
         self.antnode = None
         self.channel = None
 
@@ -51,12 +50,12 @@ class PowerMeter(event.EventCallback):
         self.stop()
 
     def _start_antnode(self):
-        stick = driver.USB1Driver(SERIAL, log=None, debug=False)
+        stick = driver.USB1Driver(self.serial, log=None, debug=False)
         self.antnode = node.Node(stick)
         self.antnode.start()
 
     def _setup_channel(self):
-        key = node.Network(name='N:ANT+', key=NETKEY)
+        key = node.Network(name='N:ANT+', key=self.netkey)
         self.antnode.setNetworkKey(0, key)
         self.channel = self.antnode.getFreeChannel()
         self.channel.name = 'C:PowerMeter'
@@ -71,9 +70,12 @@ class PowerMeter(event.EventCallback):
         if isinstance(msg, message.ChannelBroadcastDataMessage):
             if msg.payload[1] == 0x10: # Power Main Data Page
                 pwr = msg.payload[8] * 256 + msg.payload[7]
-                print(pwr)
+                self.report(pwr)
 
-with PowerMeter() as pwr:
+def power_report(pwr):
+    print(pwr)
+
+with PowerMeter(serial='/dev/ttyUSB0', netkey=[0xb9, 0xa5, 0x21, 0xfb, 0xbd, 0x72, 0xc3, 0x45], report=power_report) as pwr:
     pwr.start()
     while True:
         try:
